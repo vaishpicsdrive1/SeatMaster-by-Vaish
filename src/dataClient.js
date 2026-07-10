@@ -1,5 +1,6 @@
-const base = import.meta.env.VITE_SHEETS_API_BASE || ""
 const isProd = import.meta.env.PROD === true
+const directBase = import.meta.env.VITE_SHEETS_API_BASE || ""
+const base = directBase || (isProd ? "/api/sheets" : "")
 
 const STORAGE_KEY = "bucksseat_latest_report_by_location"
 const FRANCHISES_KEY = "bucksseat_franchises"
