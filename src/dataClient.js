@@ -23,9 +23,12 @@ async function getLatestFromSheets(location) {
   }
   try {
     const url = location
-      ? `${base}?route=latest&location=${encodeURIComponent(location)}`
-      : `${base}?route=latest`
-    const res = await fetch(url, { headers: { Accept: "application/json" } })
+      ? `${base}?route=latest&location=${encodeURIComponent(location)}&t=${Date.now()}`
+      : `${base}?route=latest&t=${Date.now()}`
+    const res = await fetch(url, { 
+      headers: { Accept: "application/json" },
+      cache: "no-store" 
+    })
     if (!res.ok) {
       return { data: null, error: new Error("network-error") }
     }
@@ -65,6 +68,24 @@ async function getLatestFromSheets(location) {
   }
 }
 
+async function postToSheets(route, payload) {
+  const res = await fetch(`${base}?route=${encodeURIComponent(route)}`, {
+    method: "POST",
+    headers: {
+      // Apps Script accepts the raw body, and this content type avoids CORS preflight.
+      "Content-Type": "text/plain;charset=utf-8",
+    },
+    body: JSON.stringify(payload),
+  })
+
+  let json = null
+  try {
+    json = await res.json()
+  } catch {}
+
+  return { res, json }
+}
+
 function submitToLocal(status, chargingPorts, location) {
   const created_at = new Date().toISOString()
   const raw = localStorage.getItem(STORAGE_KEY)
@@ -85,14 +106,14 @@ async function submitToSheets(status, chargingPorts, location) {
     }
   }
   try {
-    const res = await fetch(`${base}?route=report`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ status, chargingPorts, location }),
+    const { res, json } = await postToSheets("report", {
+      status,
+      chargingPorts,
+      location,
     })
-    if (!res.ok) {
+    if (!res.ok || json?.error) {
       return {
-        error: new Error("submit-failed"),
+        error: new Error(json?.error || "submit-failed"),
         created_at: null,
         chargingPorts,
         location,
@@ -120,13 +141,9 @@ async function registerFranchiseToSheets(payload) {
     return { error: new Error("missing-base-url") }
   }
   try {
-    const res = await fetch(`${base}?route=register-franchise`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(payload),
-    })
-    if (!res.ok) {
-      return { error: new Error("register-failed") }
+    const { res, json } = await postToSheets("register-franchise", payload)
+    if (!res.ok || json?.error) {
+      return { error: new Error(json?.error || "register-failed") }
     }
     return { error: null }
   } catch (error) {
@@ -193,9 +210,12 @@ export async function validateTableCode(code, location) {
       const url = location
         ? `${base}?route=validate-table&code=${encodeURIComponent(
             code
-          )}&location=${encodeURIComponent(location)}`
-        : `${base}?route=validate-table&code=${encodeURIComponent(code)}`
-      const res = await fetch(url, { headers: { Accept: "application/json" } })
+          )}&location=${encodeURIComponent(location)}&t=${Date.now()}`
+        : `${base}?route=validate-table&code=${encodeURIComponent(code)}&t=${Date.now()}`
+      const res = await fetch(url, { 
+        headers: { Accept: "application/json" },
+        cache: "no-store" 
+      })
       if (res.ok) {
         const json = await res.json()
         return { valid: !!json?.valid }
@@ -213,12 +233,12 @@ export async function validateTableCode(code, location) {
 export async function placeOrder(tableCode, orderText, location) {
   if (base) {
     try {
-      const res = await fetch(`${base}?route=order`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ tableCode, orderText, location }),
+      const { res, json } = await postToSheets("order", {
+        tableCode,
+        orderText,
+        location,
       })
-      if (res.ok) return { error: null }
+      if (res.ok && !json?.error) return { error: null }
     } catch {}
   }
   const raw = localStorage.getItem("bucksseat_orders_by_location")

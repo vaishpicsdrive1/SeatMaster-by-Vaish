@@ -202,7 +202,7 @@ export default function App() {
 
     const poll = setInterval(async () => {
       const { data } = await getLatest(location)
-      if (data) {
+      if (data && !ignore) {
         setStatus(data.status)
         setLastUpdated(new Date(data.created_at))
         if (typeof data.chargingPorts === "number") {
@@ -212,11 +212,19 @@ export default function App() {
         setIsAnimating(true)
         setTimeout(() => setIsAnimating(false), 450)
       }
-    }, 10000)
+    }, 3000)
+
+    const handleStorage = (e) => {
+      if (e.key === "bucksseat_latest_report_by_location") {
+        loadLatest()
+      }
+    }
+    window.addEventListener("storage", handleStorage)
 
     return () => {
       ignore = true
       clearInterval(poll)
+      window.removeEventListener("storage", handleStorage)
     }
   }, [location])
 
