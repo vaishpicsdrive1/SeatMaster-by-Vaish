@@ -18,6 +18,11 @@ function doGet(e) {
     return ContentService.createTextOutput(JSON.stringify({ valid: valid })).setMimeType(ContentService.MimeType.JSON);
   }
 
+  if (route === "get-seats") {
+    var seats = getAllSeats();
+    return ContentService.createTextOutput(JSON.stringify(seats)).setMimeType(ContentService.MimeType.JSON);
+  }
+
   return ContentService.createTextOutput(JSON.stringify({ error: "Unknown route" })).setMimeType(ContentService.MimeType.JSON);
 }
 
@@ -43,6 +48,11 @@ function doPost(e) {
 
   if (route === "order") {
     var result = placeOrder(body.tableCode, body.orderText, body.location);
+    return ContentService.createTextOutput(JSON.stringify(result)).setMimeType(ContentService.MimeType.JSON);
+  }
+
+  if (route === "update-seat") {
+    var result = updateSeatStatus(body.seatId, body.status);
     return ContentService.createTextOutput(JSON.stringify(result)).setMimeType(ContentService.MimeType.JSON);
   }
 
@@ -121,4 +131,49 @@ function placeOrder(tableCode, orderText, location) {
   }
   sheet.appendRow([new Date().toISOString(), location || "Default store", tableCode || "", orderText || ""]);
   return { success: true };
+}
+
+function updateSeatStatus(seatId, status) {
+  var sheet = getSheet("Seats");
+  if (sheet.getLastRow() === 0) {
+    sheet.appendRow(["seatId", "status", "lastUpdated"]);
+  }
+  
+  var data = sheet.getDataRange().getValues();
+  var found = false;
+  
+  for (var i = 1; i < data.length; i++) {
+    if (String(data[i][0]) === String(seatId)) {
+      sheet.getRange(i + 1, 2).setValue(status);
+      sheet.getRange(i + 1, 3).setValue(new Date().toISOString());
+      found = true;
+      break;
+    }
+  }
+  
+  if (!found) {
+    sheet.appendRow([seatId, status, new Date().toISOString()]);
+  }
+  
+  return { success: true };
+}
+
+function getAllSeats() {
+  var sheet = getSheet("Seats");
+  if (sheet.getLastRow() === 0) {
+    sheet.appendRow(["seatId", "status", "lastUpdated"]);
+  }
+  
+  var data = sheet.getDataRange().getValues();
+  var seats = [];
+  
+  for (var i = 1; i < data.length; i++) {
+    seats.push({
+      seatId: data[i][0],
+      status: data[i][1],
+      lastUpdated: data[i][2]
+    });
+  }
+  
+  return seats;
 }

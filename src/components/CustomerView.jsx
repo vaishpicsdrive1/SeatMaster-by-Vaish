@@ -1,8 +1,9 @@
 import { useEffect, useMemo, useState } from "react"
-import { getLatest, validateTableCode, placeOrder } from "../dataClient"
+import { getLatest, validateTableCode, placeOrder, getSeats } from "../dataClient"
 import StatusCard from "./StatusCard"
 
 const DEFAULT_LOCATIONS = ["Main Street Starbucks", "Mall Starbucks"]
+const TOTAL_SEATS = 10
 
 function formatTimeAgo(date) {
   if (!date) return "No reports yet"
@@ -56,6 +57,7 @@ export default function CustomerView() {
   const [orderText, setOrderText] = useState("")
   const [orderStatus, setOrderStatus] = useState("")
   const [isAnimating, setIsAnimating] = useState(false)
+  const [seats, setSeats] = useState([])
 
   const lastUpdatedLabel = useMemo(
     () => formatTimeAgo(lastUpdated),
@@ -65,6 +67,11 @@ export default function CustomerView() {
   const seatFillPct = statusPercentages[status] ?? 0
   const seatFillCount = Math.round((seatFillPct / 100) * 20)
   const chargingFillCount = Math.max(0, chargingPorts || 0)
+  
+  // Calculate free seats from seats data
+  const freeSeatCount = useMemo(() => {
+    return seats.filter(seat => seat.status === "free").length
+  }, [seats])
 
   useEffect(() => {
     let ignore = false
@@ -86,9 +93,17 @@ export default function CustomerView() {
       }
     }
 
-    loadLatest()
+    const loadSeats = async () => {
+      const { data } = await getSeats()
+      if (!ignore) {
+        setSeats(data)
+      }
+    }
 
-    const poll = setInterval(async () => {
+    loadLatest()
+    loadSeats()
+
+    const pollLatest = setInterval(async () => {
       const { data } = await getLatest(location)
       if (data && !ignore) {
         setStatus(data.status)
@@ -98,6 +113,13 @@ export default function CustomerView() {
         }
         setIsAnimating(true)
         setTimeout(() => setIsAnimating(false), 450)
+      }
+    }, 3000)
+    
+    const pollSeats = setInterval(async () => {
+      const { data } = await getSeats()
+      if (!ignore) {
+        setSeats(data)
       }
     }, 3000)
 
@@ -110,7 +132,8 @@ export default function CustomerView() {
 
     return () => {
       ignore = true
-      clearInterval(poll)
+      clearInterval(pollLatest)
+      clearInterval(pollSeats)
       window.removeEventListener("storage", handleStorage)
     }
   }, [location])
@@ -246,6 +269,15 @@ export default function CustomerView() {
         />
 
         <section className="rounded-3xl bg-white p-6 shadow-soft ring-1 ring-[#cbe7dd]">
+          <div className="mb-6">
+            <h2 className="font-display text-lg font-semibold text-[#1e3932]">
+              Live Seat Availability
+            </h2>
+            <p className="mt-1 text-sm text-[#4b5563]">
+              {freeSeatCount} of {TOTAL_SEATS} seats free
+            </p>
+          </div>
+          
           <h2 className="font-display text-lg font-semibold text-[#1e3932]">
             How full is this store?
           </h2>

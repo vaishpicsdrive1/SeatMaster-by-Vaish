@@ -1,10 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from "react"
-import { getLatest, submitReport, registerFranchise } from "../dataClient"
+import { getLatest, submitReport, registerFranchise, getSeats } from "../dataClient"
 import StatusCard from "./StatusCard"
 import SubmitButtons from "./SubmitButtons"
 
 const COOLDOWN_MS = 5 * 60 * 1000
 const DEFAULT_LOCATIONS = ["Main Street Starbucks", "Mall Starbucks"]
+const TOTAL_SEATS = 10
 
 function playBeep() {
   try {
@@ -102,6 +103,12 @@ export default function BaristaView() {
   const [branchOpenTimesInput, setBranchOpenTimesInput] = useState("")
   const [baristaLoginStatus, setBaristaLoginStatus] = useState("")
   const [baristaSearchTerm, setBaristaSearchTerm] = useState("")
+  const [seats, setSeats] = useState([])
+
+  // Calculate free seats from seats data
+  const freeSeatCount = useMemo(() => {
+    return seats.filter(seat => seat.status === "free").length
+  }, [seats])
 
   const lastUpdatedLabel = useMemo(
     () => formatTimeAgo(lastUpdated),
@@ -184,9 +191,17 @@ export default function BaristaView() {
       }
     }
 
-    loadLatest()
+    const loadSeats = async () => {
+      const { data } = await getSeats()
+      if (!ignore) {
+        setSeats(data)
+      }
+    }
 
-    const poll = setInterval(async () => {
+    loadLatest()
+    loadSeats()
+
+    const pollLatest = setInterval(async () => {
       const { data } = await getLatest(location)
       if (data && !ignore) {
         setStatus(data.status)
@@ -199,6 +214,13 @@ export default function BaristaView() {
         setTimeout(() => setIsAnimating(false), 450)
       }
     }, 3000)
+    
+    const pollSeats = setInterval(async () => {
+      const { data } = await getSeats()
+      if (!ignore) {
+        setSeats(data)
+      }
+    }, 3000)
 
     const handleStorage = (e) => {
       if (e.key === "bucksseat_latest_report_by_location") {
@@ -209,7 +231,8 @@ export default function BaristaView() {
 
     return () => {
       ignore = true
-      clearInterval(poll)
+      clearInterval(pollLatest)
+      clearInterval(pollSeats)
       window.removeEventListener("storage", handleStorage)
     }
   }, [location])
@@ -435,6 +458,15 @@ export default function BaristaView() {
         />
 
         <section className="rounded-3xl bg-white p-6 shadow-soft ring-1 ring-[#cbe7dd]">
+          <div className="mb-6">
+            <h2 className="font-display text-lg font-semibold text-[#1e3932]">
+              Live Seat Availability
+            </h2>
+            <p className="mt-1 text-sm text-[#4b5563]">
+              {freeSeatCount} of {TOTAL_SEATS} seats free
+            </p>
+          </div>
+          
           <h2 className="font-display text-lg font-semibold text-[#1e3932]">
             Submit a quick update
           </h2>

@@ -255,3 +255,91 @@ export async function placeOrder(tableCode, orderText, location) {
   localStorage.setItem("bucksseat_orders_by_location", JSON.stringify(current))
   return { error: null }
 }
+
+const SEATS_STORAGE_KEY = "bucksseat_seats";
+
+function getSeatsFromLocal() {
+  const raw = localStorage.getItem(SEATS_STORAGE_KEY);
+  if (!raw) return { data: [], error: null };
+  try {
+    return { data: JSON.parse(raw), error: null };
+  } catch {
+    return { data: [], error: null };
+  }
+}
+
+function updateSeatInLocal(seatId, status) {
+  const raw = localStorage.getItem(SEATS_STORAGE_KEY);
+  const current = raw ? JSON.parse(raw) : [];
+  const existingIndex = current.findIndex(seat => String(seat.seatId) === String(seatId));
+  const newSeat = {
+    seatId,
+    status,
+    lastUpdated: new Date().toISOString(),
+  };
+  
+  if (existingIndex >= 0) {
+    current[existingIndex] = newSeat;
+  } else {
+    current.push(newSeat);
+  }
+  
+  localStorage.setItem(SEATS_STORAGE_KEY, JSON.stringify(current));
+  return { error: null };
+}
+
+async function getSeatsFromSheets() {
+  if (!base) {
+    return { data: [], error: new Error("missing-base-url") };
+  }
+  try {
+    const url = `${base}?route=get-seats&t=${Date.now()}`;
+    const res = await fetch(url, {
+      headers: { Accept: "application/json" },
+      cache: "no-store",
+    });
+    if (!res.ok) {
+      return { data: [], error: new Error("network-error") };
+    }
+    const json = await res.json();
+    return { data: Array.isArray(json) ? json : [], error: null };
+  } catch (error) {
+    return { data: [], error };
+  }
+}
+
+async function updateSeatToSheets(seatId, status) {
+  if (!base) {
+    return { error: new Error("missing-base-url") };
+  }
+  try {
+    const { res, json } = await postToSheets("update-seat", { seatId, status });
+    if (!res.ok || json?.error) {
+      return { error: new Error(json?.error || "update-seat-failed") };
+    }
+    return { error: null };
+  } catch (error) {
+    return { error };
+  }
+}
+
+export async function getSeats() {
+  if (base) {
+    return getSeatsFromSheets();
+  }
+  if (isProd) {
+    return { data: [], error: new Error("missing-base-url") };
+  }
+  return getSeatsFromLocal();
+}
+
+export async function updateSeatStatus(seatId, status) {
+  if (base) {
+    return updateSeatToSheets(seatId, status);
+  }
+  if (isProd) {
+    return { error: new Error("missing-base-url") };
+  }
+  return updateSeatInLocal(seatId, status);
+}
+
