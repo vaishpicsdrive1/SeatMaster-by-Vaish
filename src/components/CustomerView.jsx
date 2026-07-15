@@ -64,14 +64,28 @@ export default function CustomerView() {
     [lastUpdated]
   )
 
-  const seatFillPct = statusPercentages[status] ?? 0
-  const seatFillCount = Math.round((seatFillPct / 100) * 20)
   const chargingFillCount = Math.max(0, chargingPorts || 0)
   
-  // Calculate free seats from seats data
+  // Calculate free seats and occupancy percentage from seats data
   const freeSeatCount = useMemo(() => {
     return seats.filter(seat => seat.status === "free").length
   }, [seats])
+  
+  const occupiedSeatCount = useMemo(() => {
+    return seats.filter(seat => seat.status === "occupied").length
+  }, [seats])
+  
+  // Calculate occupancy percentage from sensor data if available, else use barista status
+  const seatFillPct = useMemo(() => {
+    if (seats.length > 0) {
+      // If we have sensor data, calculate percentage from occupied seats
+      return Math.round((occupiedSeatCount / TOTAL_SEATS) * 100)
+    }
+    // Fallback to barista status if no sensor data
+    return statusPercentages[status] ?? 0
+  }, [seats, occupiedSeatCount, status])
+  
+  const seatFillCount = Math.round((seatFillPct / 100) * 20)
 
   useEffect(() => {
     let ignore = false

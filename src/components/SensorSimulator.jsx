@@ -22,6 +22,14 @@ export default function SensorSimulator() {
       initialSeats.push(existing || { seatId: i, status: "free" })
     }
     setSeats(initialSeats)
+    
+    // If there are seats not in the data, initialize them
+    const seatsToUpdate = initialSeats.filter(seat => 
+      !data.find(s => String(s.seatId) === String(seat.seatId))
+    )
+    for (const seat of seatsToUpdate) {
+      await updateSeatStatus(seat.seatId, seat.status)
+    }
   }
 
   async function handleSeatClick(seatId, currentStatus) {
@@ -58,7 +66,7 @@ export default function SensorSimulator() {
                 disabled={isLoading}
                 className={`aspect-square rounded-2xl text-white font-bold text-lg shadow-soft transition-all ${
                   seat.status === "occupied"
-                    ? "bg-red-600 hover:bg-red-700"
+                    ? "bg-yellow-500 hover:bg-yellow-600"
                     : "bg-green-600 hover:bg-green-700"
                 }`}
               >
@@ -73,7 +81,7 @@ export default function SensorSimulator() {
               <span className="text-sm text-[#4b5563]">Free</span>
             </div>
             <div className="flex items-center gap-2">
-              <div className="h-4 w-4 rounded bg-red-600"></div>
+              <div className="h-4 w-4 rounded bg-yellow-500"></div>
               <span className="text-sm text-[#4b5563]">Occupied</span>
             </div>
           </div>

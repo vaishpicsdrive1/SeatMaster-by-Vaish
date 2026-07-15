@@ -122,6 +122,26 @@ export default function BaristaView() {
     return "every 5 minutes"
   }, [reminderIntervalMs])
 
+  const occupiedSeatCount = useMemo(() => {
+    return seats.filter(seat => seat.status === "occupied").length
+  }, [seats])
+  
+  // Calculate occupancy percentage from sensor data if available, else use barista status
+  const seatFillPct = useMemo(() => {
+    if (seats.length > 0) {
+      // If we have sensor data, calculate percentage from occupied seats
+      return Math.round((occupiedSeatCount / TOTAL_SEATS) * 100)
+    }
+    // Fallback to barista status if no sensor data
+    const statusPercentages = {
+      empty: 10,
+      few: 40,
+      busy: 70,
+      full: 95,
+    }
+    return statusPercentages[status] ?? 0
+  }, [seats, occupiedSeatCount, status])
+
   const filteredBranches = useMemo(() => {
     const term = baristaSearchTerm.trim().toLowerCase()
     if (!term) return locations
