@@ -257,6 +257,7 @@ export default function App() {
     const res = await submitReport(nextStatus, chargingDraft, location)
 
     if (res && res.error) {
+      console.error("Submission failed with error:", res.error)
       setMessage(`Submission failed: ${res.error.message || "Please try again."}`)
       setIsSubmitting(false)
       return
