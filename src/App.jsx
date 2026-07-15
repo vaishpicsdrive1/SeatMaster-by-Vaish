@@ -312,7 +312,7 @@ export default function App() {
 
   const seatFillPct = statusPercentages[status] ?? 0
   const seatFillCount = Math.round((seatFillPct / 100) * 20)
-  const chargingFillCount = Math.max(0, Math.min(10, chargingPorts || 0))
+  const chargingFillCount = Math.max(0, chargingPorts || 0)
 
   const handlePlaceOrder = (event) => {
     event.preventDefault()
@@ -682,11 +682,11 @@ export default function App() {
               <input
                 type="number"
                 min={0}
-                max={10}
+                max={50}
                 value={chargingDraft}
                 onChange={(event) => {
                   const value = Number(event.target.value.replace(/\D/g, "")) || 0
-                  const clamped = Math.max(0, Math.min(10, value))
+                  const clamped = Math.max(0, Math.min(50, value))
                   setChargingDraft(clamped)
                 }}
                 className="w-20 rounded-xl border border-[#cbe7dd] bg-white px-3 py-2 text-center text-sm font-semibold text-[#111827] shadow-sm"
@@ -740,18 +740,20 @@ export default function App() {
                   charging ports currently available
                 </p>
               </div>
-              <div className="flex gap-1">
-                {Array.from({ length: 10 }).map((_, index) => (
-                  <span
-                    key={index}
-                    className={`h-3 w-3 rounded-full border ${
-                      index < chargingFillCount
-                        ? "bg-black border-black"
-                        : "bg-white border-[#d1d5db]"
-                    }`}
-                  />
-                ))}
-              </div>
+              {chargingFillCount <= 10 && (
+                <div className="flex gap-1">
+                  {Array.from({ length: 10 }).map((_, index) => (
+                    <span
+                      key={index}
+                      className={`h-3 w-3 rounded-full border ${
+                        index < chargingFillCount
+                          ? "bg-black border-black"
+                          : "bg-white border-[#d1d5db]"
+                      }`}
+                    />
+                  ))}
+                </div>
+              )}
             </div>
             <form onSubmit={handlePlaceOrder} className="mt-6 space-y-3">
               <h3 className="font-display text-base font-semibold text-[#1e3932]">
