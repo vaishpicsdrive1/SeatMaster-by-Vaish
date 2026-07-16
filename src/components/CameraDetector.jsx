@@ -2,20 +2,18 @@ import { useEffect, useRef, useState } from "react";
 import * as cocoSsd from "@tensorflow-models/coco-ssd";
 import "@tensorflow/tfjs";
 import { updateSeatStatus, getSeats } from "../dataClient";
-import Peer from "peerjs";
 
 const TOTAL_SEATS = 10;
 
 export default function CameraDetector() {
   const videoRef = useRef(null);
+  const imgRef = useRef(null);
   const canvasRef = useRef(null);
   const streamRef = useRef(null);
-  const peerRef = useRef(null);
-  const callRef = useRef(null);
   const [model, setModel] = useState(null);
-  const [cameraMode, setCameraMode] = useState("local"); // local or phone
+  const [cameraMode, setCameraMode] = useState("local"); // local or ipcam
   const [facingMode, setFacingMode] = useState('environment');
-  const [phoneCode, setPhoneCode] = useState("");
+  const [ipCamUrl, setIpCamUrl] = useState("");
   const [isCalibrating, setIsCalibrating] = useState(false);
   const [isDetecting, setIsDetecting] = useState(false);
   const [zones, setZones] = useState([]);
@@ -27,7 +25,6 @@ export default function CameraDetector() {
   const [drawStart, setDrawStart] = useState({ x: 0, y: 0 });
   const [drawRect, setDrawRect] = useState(null);
   const [pendingSeats, setPendingSeats] = useState(new Set());
-  const [connectionStatus, setConnectionStatus] = useState("");
 
   const detectionIntervalRef = useRef(null);
   const animationFrameRef = useRef(null);
@@ -67,7 +64,7 @@ export default function CameraDetector() {
   // Start local webcam
   useEffect(() => {
     if (cameraMode !== "local") {
-      // Clean up local stream if switching to phone mode
+      // Clean up local stream if switching away
       if (streamRef.current) {
         streamRef.current.getTracks().forEach(track => track.stop());
       }
@@ -100,192 +97,6 @@ export default function CameraDetector() {
     };
   }, [facingMode, cameraMode]);
 
-  // Cleanup PeerJS on unmount or mode switch
-  useEffect(() => {
-    const timestamp = new Date().toLocaleTimeString();
-    console.log(`[${timestamp}] CameraDetector: Cleanup useEffect (cameraMode) initialized!`);
-    return () => {
-      const cleanupTimestamp = new Date().toLocaleTimeString();
-      console.log(`[${cleanupTimestamp}] CameraDetector: Cleanup useEffect running!`);
-      if (callRef.current) {
-        callRef.current.close();
-        callRef.current = null;
-      }
-      if (peerRef.current) {
-        peerRef.current.destroy();
-        peerRef.current = null;
-      }
-    };
-  }, [cameraMode]);
-
-  async function connectToPhone() {
-    const timestamp = new Date().toLocaleTimeString();
-    console.log(`[${timestamp}] CameraDetector: connectToPhone called!`);
-
-    if (!phoneCode || phoneCode.length !== 4) {
-      setConnectionStatus("Please enter a valid 4-digit code");
-      return;
-    }
-
-    // Guard: if a peer already exists, don't create another one
-    if (peerRef.current) {
-      console.log(`[${timestamp}] CameraDetector: Peer already exists, skipping creation!`);
-      return;
-    }
-
-    setConnectionStatus("Connecting...");
-    addLog("Starting connection to phone...");
-    try {
-      const peer = new Peer({
-          debug: 3, // Enable debug logging
-          config: {
-            iceServers: [
-              { urls: "stun:stun.l.google.com:19302" },
-              { urls: "stun:stun1.l.google.com:19302" },
-              {
-                urls: "turn:openrelay.metered.ca:80",
-                username: "openrelayproject",
-                credential: "openrelayproject"
-              }
-            ]
-          }
-        });
-      peerRef.current = peer;
-
-      peer.on("open", (id) => {
-        console.log("✅ Peer connected with ID:", id);
-        addLog("Peer connected! Calling phone...");
-        const call = peer.call(phoneCode);
-        callRef.current = call;
-
-        // Log the call object to inspect its properties
-        console.log("Call object:", call);
-        // Access the underlying RTCPeerConnection directly
-        if (call.peerConnection) {
-          console.log("RTCPeerConnection available!");
-          call.peerConnection.ontrack = (event) => {
-            console.log("🎉 DIRECT ontrack event received!", event);
-            console.log("Tracks:", event.tracks);
-            console.log("Streams:", event.streams);
-            const streamToUse = (event.streams && event.streams.length > 0) ? event.streams[0] : new MediaStream([event.track]);
-            console.log('STREAM RECEIVED (ontrack):', streamToUse);
-            console.log('Video tracks:', streamToUse.getVideoTracks());
-            streamToUse.getVideoTracks().forEach(track => {
-              console.log('Track readyState:', track.readyState, 'enabled:', track.enabled, 'muted:', track.muted);
-            });
-            streamRef.current = streamToUse;
-            if (videoRef.current) {
-              videoRef.current.srcObject = streamToUse;
-              videoRef.current.play().then(() => {
-                console.log('VIDEO PLAY SUCCEEDED (ontrack)');
-              }).catch(err => {
-                console.error('VIDEO PLAY FAILED (ontrack):', err);
-              });
-              videoRef.current.onloadedmetadata = () => {
-                console.log('VIDEO METADATA — width:', videoRef.current.videoWidth, 'height:', videoRef.current.videoHeight);
-                console.log("Video metadata loaded! Playing...");
-                videoRef.current.play().catch(err => console.error("Error playing video:", err));
-              };
-            }
-            setConnectionStatus("Connected to phone");
-            addLog("Connected to phone camera!");
-          };
-        } else {
-          console.log("No RTCPeerConnection available on call object!");
-        }
-
-        // Listen for both "stream" (legacy) and "track" (newer) events
-      call.on("stream", (remoteStream) => {
-        console.log('STREAM RECEIVED:', remoteStream);
-        console.log('Video tracks:', remoteStream.getVideoTracks());
-        remoteStream.getVideoTracks().forEach(track => {
-          console.log('Track readyState:', track.readyState, 'enabled:', track.enabled, 'muted:', track.muted);
-        });
-        console.log("✅ Received remote stream from phone (stream event)!");
-        console.log("Stream tracks:", remoteStream.getTracks());
-        console.log("Video tracks:", remoteStream.getVideoTracks());
-        streamRef.current = remoteStream;
-        if (videoRef.current) {
-          videoRef.current.srcObject = remoteStream;
-          videoRef.current.play().then(() => {
-            console.log('VIDEO PLAY SUCCEEDED');
-          }).catch(err => {
-            console.error('VIDEO PLAY FAILED:', err);
-          });
-          videoRef.current.onloadedmetadata = () => {
-            console.log("Video metadata loaded! Playing...");
-            videoRef.current.play().catch(err => console.error("Error playing video:", err));
-          };
-        }
-        setConnectionStatus("Connected to phone");
-        addLog("Connected to phone camera!");
-      });
-
-        call.on("track", (track, remoteStream) => {
-          console.log("✅ Received remote track from phone!", track.kind);
-          console.log("Remote stream:", remoteStream);
-          console.log('STREAM RECEIVED (track):', remoteStream);
-          console.log('Video tracks:', remoteStream.getVideoTracks());
-          remoteStream.getVideoTracks().forEach(t => {
-            console.log('Track readyState:', t.readyState, 'enabled:', t.enabled, 'muted:', t.muted);
-          });
-          streamRef.current = remoteStream;
-          if (videoRef.current) {
-            videoRef.current.srcObject = remoteStream;
-            videoRef.current.play().then(() => {
-              console.log('VIDEO PLAY SUCCEEDED (track)');
-            }).catch(err => {
-              console.error('VIDEO PLAY FAILED (track):', err);
-            });
-            videoRef.current.onloadedmetadata = () => {
-              console.log('VIDEO METADATA — width:', videoRef.current.videoWidth, 'height:', videoRef.current.videoHeight);
-              console.log("Video metadata loaded! Playing...");
-              videoRef.current.play().catch(err => console.error("Error playing video:", err));
-            };
-          }
-          setConnectionStatus("Connected to phone");
-          addLog("Connected to phone camera!");
-        });
-
-        call.on("iceCandidate", (candidate) => {
-          console.log("ICE candidate received:", candidate);
-        });
-
-        call.on("iceStateChanged", (state) => {
-          console.log("ICE state changed:", state);
-          addLog("ICE state: " + state);
-        });
-
-        call.on("connectionStateChanged", (state) => {
-          console.log("Call connection state:", state);
-          addLog("Call state: " + state);
-        });
-
-        call.on("error", (err) => {
-          console.error("❌ Call error:", err);
-          setConnectionStatus("Connection failed — check the code and try again");
-          addLog("Call error: " + err.message);
-        });
-
-        call.on("close", () => {
-          console.log("Call ended");
-          setConnectionStatus("Connection closed");
-          addLog("Connection closed");
-        });
-      });
-
-      peer.on("error", (err) => {
-        console.error("❌ Peer error:", err);
-        setConnectionStatus("Connection failed — check the code and try again");
-        addLog("Peer error: " + err.message);
-      });
-    } catch (error) {
-      console.error("❌ Connection error:", error);
-      setConnectionStatus("Connection failed — check the code and try again");
-      addLog("Connection error: " + error.message);
-    }
-  }
-
   // Switch camera
   async function switchCamera() {
     // Stop current stream
@@ -301,15 +112,39 @@ export default function CameraDetector() {
     addLog(`Switched to ${newFacingMode === 'user' ? 'front' : 'back'} camera`);
   }
 
+  // Get current media element (video or img)
+  function getMediaElement() {
+    if (cameraMode === "local") {
+      return videoRef.current;
+    } else {
+      return imgRef.current;
+    }
+  }
+
+  // Get width and height from media element
+  function getMediaDimensions() {
+    const media = getMediaElement();
+    if (!media) return { width: 0, height: 0 };
+    if (cameraMode === "local") {
+      return { width: media.videoWidth, height: media.videoHeight };
+    } else {
+      return { width: media.naturalWidth, height: media.naturalHeight };
+    }
+  }
+
   // Draw canvas
   useEffect(() => {
     function drawCanvas() {
       const canvas = canvasRef.current;
-      const video = videoRef.current;
-      if (!canvas || !video) return;
+      const media = getMediaElement();
+      const { width, height } = getMediaDimensions();
+      if (!canvas || !media || width === 0 || height === 0) {
+        animationFrameRef.current = requestAnimationFrame(drawCanvas);
+        return;
+      }
       const ctx = canvas.getContext("2d");
-      canvas.width = video.videoWidth;
-      canvas.height = video.videoHeight;
+      canvas.width = width;
+      canvas.height = height;
 
       // Clear canvas
       ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -369,17 +204,19 @@ export default function CameraDetector() {
       if (animationFrameRef.current)
         cancelAnimationFrame(animationFrameRef.current);
     };
-  }, [zones, detections, isDrawing, drawRect, seatStatuses]);
+  }, [zones, detections, isDrawing, drawRect, seatStatuses, cameraMode]);
 
   // Detection loop
   useEffect(() => {
     if (!isDetecting || !model) return;
 
     const runDetection = async () => {
-      const video = videoRef.current;
-      if (!video || video.readyState !== 4) return;
+      const media = getMediaElement();
+      if (!media) return;
+      if (cameraMode === "local" && media.readyState !== 4) return;
+      if (cameraMode === "ipcam" && (!media.naturalWidth || !media.naturalHeight)) return;
 
-      const predictions = await model.detect(video);
+      const predictions = await model.detect(media);
       const people = predictions.filter(
         (p) => p.class === "person"
       );
@@ -443,7 +280,7 @@ export default function CameraDetector() {
       if (detectionIntervalRef.current)
         clearInterval(detectionIntervalRef.current);
     };
-  }, [isDetecting, model, zones, seatStatuses, statusHistory]);
+  }, [isDetecting, model, zones, seatStatuses, statusHistory, cameraMode]);
 
   function addLog(text) {
     const timestamp = new Date().toLocaleTimeString();
@@ -582,7 +419,7 @@ export default function CameraDetector() {
             AI Camera Detector
           </h1>
           <p className="mt-2 text-sm text-[#4b5563]">
-            Use your webcam to detect seat occupancy
+            Use your webcam or IP camera to detect seat occupancy
           </p>
         </header>
 
@@ -599,45 +436,33 @@ export default function CameraDetector() {
               Use This Device's Camera
             </button>
             <button
-              onClick={() => setCameraMode("phone")}
+              onClick={() => setCameraMode("ipcam")}
               className={`rounded-2xl px-4 py-2 text-sm font-semibold shadow-soft transition-all ${
-                cameraMode === "phone"
+                cameraMode === "ipcam"
                   ? "bg-[#00754a] text-white"
                   : "bg-white text-[#1e3932] ring-1 ring-[#cbe7dd]"
               }`}
             >
-              Connect to Phone Camera
+              Use IP Camera Stream
             </button>
           </div>
 
-          {cameraMode === "phone" && (
+          {cameraMode === "ipcam" && (
             <div className="mb-6">
               <label className="block text-sm font-semibold text-[#1e3932] mb-2">
-                Phone Connection Code
+                IP Camera Stream URL
               </label>
               <div className="flex gap-3 flex-wrap items-center">
                 <input
                   type="text"
-                  value={phoneCode}
-                  onChange={(e) => setPhoneCode(e.target.value)}
-                  placeholder="Enter 4-digit code"
-                  maxLength={4}
-                  className="rounded-2xl px-4 py-3 text-lg font-mono border-2 border-[#cbe7dd] focus:border-[#00754a] focus:outline-none"
+                  value={ipCamUrl}
+                  onChange={(e) => setIpCamUrl(e.target.value)}
+                  placeholder="http://192.168.100.72:8080/video"
+                  className="rounded-2xl px-4 py-3 text-lg font-mono border-2 border-[#cbe7dd] focus:border-[#00754a] focus:outline-none flex-1"
                 />
-                <button
-                  onClick={connectToPhone}
-                  className="rounded-2xl px-6 py-3 text-sm font-semibold shadow-soft transition-all bg-[#00754a] text-white"
-                >
-                  Connect
-                </button>
               </div>
-              {connectionStatus && (
-                <p className="mt-2 text-sm text-[#4b5563]">
-                  {connectionStatus}
-                </p>
-              )}
               <p className="mt-3 text-xs text-gray-500">
-                Open <a href="/phone-camera" className="text-[#00754a] font-semibold underline">/phone-camera</a> on your phone to get the code
+                Enter the MJPEG stream URL from your IP camera (e.g. IP Webcam Android app)
               </p>
             </div>
           )}
@@ -677,14 +502,23 @@ export default function CameraDetector() {
           </div>
 
           <div className="relative inline-block">
-            <video
-              ref={videoRef}
-              autoPlay
-              playsInline
-              muted
-              onLoadedMetadata={() => console.log('VIDEO METADATA — width:', videoRef.current.videoWidth, 'height:', videoRef.current.videoHeight)}
-              className="max-w-full rounded-2xl"
-            />
+            {cameraMode === "local" ? (
+              <video
+                ref={videoRef}
+                autoPlay
+                playsInline
+                muted
+                className="max-w-full rounded-2xl"
+              />
+            ) : (
+              <img
+                ref={imgRef}
+                src={ipCamUrl}
+                alt="IP Camera Stream"
+                className="max-w-full rounded-2xl"
+                crossOrigin="anonymous"
+              />
+            )}
             <canvas
               ref={canvasRef}
               className="absolute top-0 left-0 max-w-full rounded-2xl"
@@ -727,7 +561,7 @@ export default function CameraDetector() {
                   className={`rounded-2xl p-3 text-center text-sm font-semibold ${
                     seatStatuses[seatId] === "occupied"
                       ? "bg-yellow-100 text-yellow-800"
-                      : "bg-green-100 text-green-800"
+                      : "bg-green-100 text-green-80"
                   }`}
                 >
                   Seat {seatId}: {seatStatuses[seatId]}
@@ -737,7 +571,7 @@ export default function CameraDetector() {
           </div>
         </section>
 
-        <footer className="text-center text-xs text-slate-400">
+        <footer className="text-center text-xs text-slate-40">
           Requires HTTPS or localhost for webcam access
         </footer>
       </main>
