@@ -6,6 +6,8 @@ const TOTAL_SEATS = 10
 export default function SensorSimulator() {
   const [seats, setSeats] = useState([])
   const [pendingSeats, setPendingSeats] = useState(new Set()) // Track seats being updated
+  // Keep isLoading for backwards compatibility but we don't use it much anymore
+  const [isLoading, setIsLoading] = useState(false)
 
   useEffect(() => {
     loadSeats()
@@ -95,12 +97,12 @@ export default function SensorSimulator() {
               <button
                 key={seat.seatId}
                 onClick={() => handleSeatClick(seat.seatId, seat.status)}
-                disabled={isLoading}
+                disabled={pendingSeats.has(seat.seatId)}
                 className={`aspect-square rounded-2xl text-white font-bold text-lg shadow-soft transition-all ${
                   seat.status === "occupied"
                     ? "bg-yellow-500 hover:bg-yellow-600"
                     : "bg-green-600 hover:bg-green-700"
-                }`}
+                } ${pendingSeats.has(seat.seatId) ? "opacity-50 cursor-not-allowed" : ""}`}
               >
                 {seat.seatId}
               </button>
