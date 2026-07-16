@@ -193,21 +193,31 @@ export default function CameraDetector() {
         }
 
         // Listen for both "stream" (legacy) and "track" (newer) events
-        call.on("stream", (remoteStream) => {
-          console.log("✅ Received remote stream from phone (stream event)!");
-          console.log("Stream tracks:", remoteStream.getTracks());
-          console.log("Video tracks:", remoteStream.getVideoTracks());
-          streamRef.current = remoteStream;
-          if (videoRef.current) {
-            videoRef.current.srcObject = remoteStream;
-            videoRef.current.onloadedmetadata = () => {
-              console.log("Video metadata loaded! Playing...");
-              videoRef.current.play().catch(err => console.error("Error playing video:", err));
-            };
-          }
-          setConnectionStatus("Connected to phone");
-          addLog("Connected to phone camera!");
+      call.on("stream", (remoteStream) => {
+        console.log('STREAM RECEIVED:', remoteStream);
+        console.log('Video tracks:', remoteStream.getVideoTracks());
+        remoteStream.getVideoTracks().forEach(track => {
+          console.log('Track readyState:', track.readyState, 'enabled:', track.enabled, 'muted:', track.muted);
         });
+        console.log("✅ Received remote stream from phone (stream event)!");
+        console.log("Stream tracks:", remoteStream.getTracks());
+        console.log("Video tracks:", remoteStream.getVideoTracks());
+        streamRef.current = remoteStream;
+        if (videoRef.current) {
+          videoRef.current.srcObject = remoteStream;
+          videoRef.current.play().then(() => {
+            console.log('VIDEO PLAY SUCCEEDED');
+          }).catch(err => {
+            console.error('VIDEO PLAY FAILED:', err);
+          });
+          videoRef.current.onloadedmetadata = () => {
+            console.log("Video metadata loaded! Playing...");
+            videoRef.current.play().catch(err => console.error("Error playing video:", err));
+          };
+        }
+        setConnectionStatus("Connected to phone");
+        addLog("Connected to phone camera!");
+      });
 
         call.on("track", (track, remoteStream) => {
           console.log("✅ Received remote track from phone!", track.kind);
@@ -659,6 +669,7 @@ export default function CameraDetector() {
               autoPlay
               playsInline
               muted
+              onLoadedMetadata={() => console.log('VIDEO METADATA — width:', videoRef.current.videoWidth, 'height:', videoRef.current.videoHeight)}
               className="max-w-full rounded-2xl"
             />
             <canvas
