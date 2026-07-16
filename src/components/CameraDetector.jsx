@@ -66,7 +66,13 @@ export default function CameraDetector() {
 
   // Start local webcam
   useEffect(() => {
-    if (cameraMode !== "local") return;
+    if (cameraMode !== "local") {
+      // Clean up local stream if switching to phone mode
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach(track => track.stop());
+      }
+      return;
+    }
 
     async function startWebcam() {
       try {
@@ -76,6 +82,9 @@ export default function CameraDetector() {
         streamRef.current = stream;
         if (videoRef.current) {
           videoRef.current.srcObject = stream;
+          videoRef.current.onloadedmetadata = () => {
+            videoRef.current.play().catch(err => console.error("Error playing local video:", err));
+          };
         }
       } catch (error) {
         console.error("Failed to access webcam:", error);
@@ -113,7 +122,13 @@ export default function CameraDetector() {
     addLog("Starting connection to phone...");
     try {
       const peer = new Peer({
-        debug: 3 // Enable debug logging
+        debug: 3, // Enable debug logging
+        config: {
+          iceServers: [
+            { urls: "stun:stun.l.google.com:19302" },
+            { urls: "stun:stun1.l.google.com:19302" }
+          ]
+        }
       });
       peerRef.current = peer;
 
@@ -126,9 +141,14 @@ export default function CameraDetector() {
         call.on("stream", (remoteStream) => {
           console.log("✅ Received remote stream from phone!");
           console.log("Stream tracks:", remoteStream.getTracks());
+          console.log("Video tracks:", remoteStream.getVideoTracks());
           streamRef.current = remoteStream;
           if (videoRef.current) {
             videoRef.current.srcObject = remoteStream;
+            videoRef.current.onloadedmetadata = () => {
+              console.log("Video metadata loaded! Playing...");
+              videoRef.current.play().catch(err => console.error("Error playing video:", err));
+            };
           }
           setConnectionStatus("Connected to phone");
           addLog("Connected to phone camera!");

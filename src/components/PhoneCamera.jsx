@@ -59,7 +59,13 @@ export default function PhoneCamera() {
 
     // Initialize PeerJS
     const peer = new Peer(code, {
-      debug: 3 // Enable debug logging
+      debug: 3, // Enable debug logging
+      config: {
+        iceServers: [
+          { urls: "stun:stun.l.google.com:19302" },
+          { urls: "stun:stun1.l.google.com:19302" }
+        ]
+      }
     });
     peerRef.current = peer;
 
