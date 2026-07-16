@@ -5,7 +5,7 @@ const TOTAL_SEATS = 10
 
 export default function SensorSimulator() {
   const [seats, setSeats] = useState([])
-  const [isLoading, setIsLoading] = useState(false)
+  const [pendingSeats, setPendingSeats] = useState(new Set()) // Track seats being updated
 
   useEffect(() => {
     loadSeats()
@@ -21,7 +21,21 @@ export default function SensorSimulator() {
       const existing = data.find(s => String(s.seatId) === String(i))
       initialSeats.push(existing || { seatId: i, status: "free" })
     }
-    setSeats(initialSeats)
+    
+    // Merge with local state, but don't overwrite pending seats
+    setSeats(prevSeats => {
+      const newSeats = [...initialSeats]
+      prevSeats.forEach(prevSeat => {
+        if (pendingSeats.has(prevSeat.seatId)) {
+          // Keep the local state for pending seats
+          const index = newSeats.findIndex(s => String(s.seatId) === String(prevSeat.seatId))
+          if (index !== -1) {
+            newSeats[index] = prevSeat
+          }
+        }
+      })
+      return newSeats
+    })
     
     // If there are seats not in the data, initialize them
     const seatsToUpdate = initialSeats.filter(seat => 
@@ -40,6 +54,7 @@ export default function SensorSimulator() {
         seat.seatId === seatId ? { ...seat, status: newStatus } : seat
       )
     )
+    setPendingSeats(prev => new Set(prev).add(seatId)) // Mark as pending
     
     // Update backend in the background
     try {
@@ -48,6 +63,12 @@ export default function SensorSimulator() {
       console.error("Failed to update seat status:", error)
       // Revert if there's an error
       await loadSeats()
+    } finally {
+      setPendingSeats(prev => {
+        const newSet = new Set(prev)
+        newSet.delete(seatId)
+        return newSet
+      }) // Clear pending state
     }
   }
 
