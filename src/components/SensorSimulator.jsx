@@ -33,11 +33,22 @@ export default function SensorSimulator() {
   }
 
   async function handleSeatClick(seatId, currentStatus) {
-    setIsLoading(true)
+    // Optimistic update: change UI immediately
     const newStatus = currentStatus === "occupied" ? "free" : "occupied"
-    await updateSeatStatus(seatId, newStatus)
-    await loadSeats()
-    setIsLoading(false)
+    setSeats(prevSeats => 
+      prevSeats.map(seat => 
+        seat.seatId === seatId ? { ...seat, status: newStatus } : seat
+      )
+    )
+    
+    // Update backend in the background
+    try {
+      await updateSeatStatus(seatId, newStatus)
+    } catch (error) {
+      console.error("Failed to update seat status:", error)
+      // Revert if there's an error
+      await loadSeats()
+    }
   }
 
   return (
