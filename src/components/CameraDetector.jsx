@@ -154,6 +154,20 @@ export default function CameraDetector() {
           addLog("Connected to phone camera!");
         });
 
+        call.on("iceCandidate", (candidate) => {
+          console.log("ICE candidate received:", candidate);
+        });
+
+        call.on("iceStateChanged", (state) => {
+          console.log("ICE state changed:", state);
+          addLog("ICE state: " + state);
+        });
+
+        call.on("connectionStateChanged", (state) => {
+          console.log("Call connection state:", state);
+          addLog("Call state: " + state);
+        });
+
         call.on("error", (err) => {
           console.error("❌ Call error:", err);
           setConnectionStatus("Connection failed — check the code and try again");

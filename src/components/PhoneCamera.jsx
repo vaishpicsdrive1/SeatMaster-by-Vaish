@@ -83,6 +83,8 @@ export default function PhoneCamera() {
       addLog("Incoming call received!");
       if (streamRef.current && streamReady) {
         console.log("Answering call with stream...");
+        console.log("Number of tracks in stream:", streamRef.current.getTracks().length);
+        console.log("Video tracks:", streamRef.current.getVideoTracks());
         call.answer(streamRef.current);
         setStatus("Connected — streaming");
         setIsConnected(true);
@@ -94,6 +96,20 @@ export default function PhoneCamera() {
 
       call.on("stream", (remoteStream) => {
         console.log("Received remote stream (but we shouldn't need this)!");
+      });
+
+      call.on("iceCandidate", (candidate) => {
+        console.log("ICE candidate received:", candidate);
+      });
+
+      call.on("iceStateChanged", (state) => {
+        console.log("ICE state changed:", state);
+        addLog("ICE state: " + state);
+      });
+
+      call.on("connectionStateChanged", (state) => {
+        console.log("Call connection state:", state);
+        addLog("Call state: " + state);
       });
 
       call.on("close", () => {
