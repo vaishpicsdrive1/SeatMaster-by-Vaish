@@ -8,7 +8,9 @@ const TOTAL_SEATS = 10;
 export default function CameraDetector() {
   const videoRef = useRef(null);
   const canvasRef = useRef(null);
+  const streamRef = useRef(null);
   const [model, setModel] = useState(null);
+  const [facingMode, setFacingMode] = useState('environment');
   const [isCalibrating, setIsCalibrating] = useState(false);
   const [isDetecting, setIsDetecting] = useState(false);
   const [zones, setZones] = useState([]);
@@ -61,8 +63,9 @@ export default function CameraDetector() {
     async function startWebcam() {
       try {
         const stream = await navigator.mediaDevices.getUserMedia({
-          video: true,
+          video: { facingMode: { ideal: facingMode } },
         });
+        streamRef.current = stream;
         if (videoRef.current) {
           videoRef.current.srcObject = stream;
         }
@@ -72,7 +75,29 @@ export default function CameraDetector() {
       }
     }
     startWebcam();
-  }, []);
+
+    return () => {
+      // Cleanup stream on unmount
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach(track => track.stop());
+      }
+    };
+  }, [facingMode]);
+
+  // Switch camera
+  async function switchCamera() {
+    // Stop current stream
+    if (streamRef.current) {
+      streamRef.current.getTracks().forEach(track => track.stop());
+    }
+
+    // Toggle facing mode
+    const newFacingMode = facingMode === 'user' ? 'environment' : 'user';
+    setFacingMode(newFacingMode);
+    // Clear zones since camera changed
+    setZones([]);
+    addLog(`Switched to ${newFacingMode === 'user' ? 'front' : 'back'} camera`);
+  }
 
   // Draw canvas
   useEffect(() => {
@@ -251,6 +276,18 @@ export default function CameraDetector() {
     };
   }
 
+  function getTouchPos(e) {
+    const canvas = canvasRef.current;
+    const rect = canvas.getBoundingClientRect();
+    const scaleX = canvas.width / rect.width;
+    const scaleY = canvas.height / rect.height;
+    const touch = e.touches[0];
+    return {
+      x: (touch.clientX - rect.left) * scaleX,
+      y: (touch.clientY - rect.top) * scaleY,
+    };
+  }
+
   function handleMouseDown(e) {
     if (!isCalibrating) return;
     const pos = getMousePos(e);
@@ -272,6 +309,47 @@ export default function CameraDetector() {
 
   function handleMouseUp() {
     if (!isDrawing || !isCalibrating) return;
+    setIsDrawing(false);
+
+    if (drawRect && drawRect.width > 10 && drawRect.height > 10) {
+      const seatId = prompt("Enter seat ID (1-10):");
+      if (seatId) {
+        const parsedId = parseInt(seatId);
+        if (parsedId >= 1 && parsedId <= TOTAL_SEATS) {
+          setZones((prev) => [
+            ...prev.filter(z => z.seatId !== parsedId),
+            { ...drawRect, seatId: parsedId },
+          ]);
+        }
+      }
+    }
+    setDrawRect(null);
+  }
+
+  function handleTouchStart(e) {
+    if (!isCalibrating) return;
+    e.preventDefault();
+    const pos = getTouchPos(e);
+    setIsDrawing(true);
+    setDrawStart(pos);
+  }
+
+  function handleTouchMove(e) {
+    if (!isDrawing || !isCalibrating) return;
+    e.preventDefault();
+    const pos = getTouchPos(e);
+    const rect = {
+      x: Math.min(pos.x, drawStart.x),
+      y: Math.min(pos.y, drawStart.y),
+      width: Math.abs(pos.x - drawStart.x),
+      height: Math.abs(pos.y - drawStart.y),
+    };
+    setDrawRect(rect);
+  }
+
+  function handleTouchEnd(e) {
+    if (!isDrawing || !isCalibrating) return;
+    e.preventDefault();
     setIsDrawing(false);
 
     if (drawRect && drawRect.width > 10 && drawRect.height > 10) {
@@ -331,6 +409,12 @@ export default function CameraDetector() {
             >
               {isDetecting ? "Stop Detection" : "Start Detection"}
             </button>
+            <button
+              onClick={switchCamera}
+              className="rounded-2xl px-4 py-2 text-sm font-semibold shadow-soft transition-all bg-white text-[#1e3932] ring-1 ring-[#cbe7dd]"
+            >
+              Switch to {facingMode === 'user' ? 'Back' : 'Front'} Camera
+            </button>
           </div>
 
           <div className="relative inline-block">
@@ -348,6 +432,9 @@ export default function CameraDetector() {
               onMouseMove={handleMouseMove}
               onMouseUp={handleMouseUp}
               onMouseLeave={handleMouseUp}
+              onTouchStart={handleTouchStart}
+              onTouchMove={handleTouchMove}
+              onTouchEnd={handleTouchEnd}
             />
           </div>
 
