@@ -6,6 +6,7 @@ export default function PhoneCamera() {
   const videoRef = useRef(null);
   const streamRef = useRef(null);
   const peerRef = useRef(null);
+  const callRef = useRef(null); // Track the active call
   const [facingMode, setFacingMode] = useState("environment");
   const [connectionCode, setConnectionCode] = useState("");
   const [status, setStatus] = useState("Waiting for laptop to connect...");
@@ -37,6 +38,21 @@ export default function PhoneCamera() {
             addLog("Camera stream ready!");
           };
         }
+
+        // If there's an active call, replace the tracks with the new stream
+        if (callRef.current && callRef.current.peerConnection) {
+          const senders = callRef.current.peerConnection.getSenders();
+          const newTracks = stream.getTracks();
+          
+          newTracks.forEach(track => {
+            const sender = senders.find(s => s.track && s.track.kind === track.kind);
+            if (sender) {
+              sender.replaceTrack(track);
+            }
+          });
+          
+          addLog("Updated call with new camera stream!");
+        }
       } catch (error) {
         console.error("Failed to access webcam:", error);
         addLog("Failed to access camera: " + error.message);
@@ -52,7 +68,7 @@ export default function PhoneCamera() {
     };
   }, [facingMode]);
 
-  // Generate 4-digit code
+  // Generate 4-digit code and initialize PeerJS
   useEffect(() => {
     const code = Math.floor(1000 + Math.random() * 9000).toString();
     setConnectionCode(code);
@@ -81,10 +97,16 @@ export default function PhoneCamera() {
     peer.on("call", (call) => {
       console.log("📞 Incoming call!");
       addLog("Incoming call received!");
-      if (streamRef.current && streamReady) {
+      callRef.current = call; // Save the active call
+      if (streamRef.current) { // We don't need to wait for streamReady, just check if stream exists
         console.log("Answering call with stream...");
         console.log("Number of tracks in stream:", streamRef.current.getTracks().length);
         console.log("Video tracks:", streamRef.current.getVideoTracks());
+        console.log("Call object on phone:", call);
+        // Log the peer connection on the phone too
+        if (call.peerConnection) {
+          console.log("RTCPeerConnection available on phone!");
+        }
         // Create a new MediaStream and add tracks to it (some browsers need this)
         const sendStream = new MediaStream();
         streamRef.current.getTracks().forEach(track => sendStream.addTrack(track));
@@ -119,6 +141,7 @@ export default function PhoneCamera() {
         console.log("Call ended");
         setStatus("Call ended");
         setIsConnected(false);
+        callRef.current = null; // Clear the active call ref
       });
 
       call.on("error", (err) => {
@@ -136,7 +159,7 @@ export default function PhoneCamera() {
     return () => {
       peer.destroy();
     };
-  }, [streamReady]);
+  }, []); // No dependencies, so this runs once on mount
 
   function switchCamera() {
     if (streamRef.current) {

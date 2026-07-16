@@ -138,6 +138,45 @@ export default function CameraDetector() {
         const call = peer.call(phoneCode, new MediaStream());
         callRef.current = call;
 
+        // Log the call object to inspect its properties
+        console.log("Call object:", call);
+        // Access the underlying RTCPeerConnection directly
+        if (call.peerConnection) {
+          console.log("RTCPeerConnection available!");
+          call.peerConnection.ontrack = (event) => {
+            console.log("🎉 DIRECT ontrack event received!", event);
+            console.log("Tracks:", event.tracks);
+            console.log("Streams:", event.streams);
+            if (event.streams && event.streams.length > 0) {
+              streamRef.current = event.streams[0];
+              if (videoRef.current) {
+                videoRef.current.srcObject = event.streams[0];
+                videoRef.current.onloadedmetadata = () => {
+                  console.log("Video metadata loaded! Playing...");
+                  videoRef.current.play().catch(err => console.error("Error playing video:", err));
+                };
+              }
+              setConnectionStatus("Connected to phone");
+              addLog("Connected to phone camera!");
+            } else {
+              // Create a new MediaStream from the received track
+              const newStream = new MediaStream([event.track]);
+              streamRef.current = newStream;
+              if (videoRef.current) {
+                videoRef.current.srcObject = newStream;
+                videoRef.current.onloadedmetadata = () => {
+                  console.log("Video metadata loaded! Playing...");
+                  videoRef.current.play().catch(err => console.error("Error playing video:", err));
+                };
+              }
+              setConnectionStatus("Connected to phone");
+              addLog("Connected to phone camera!");
+            }
+          };
+        } else {
+          console.log("No RTCPeerConnection available on call object!");
+        }
+
         // Listen for both "stream" (legacy) and "track" (newer) events
         call.on("stream", (remoteStream) => {
           console.log("✅ Received remote stream from phone (stream event)!");
