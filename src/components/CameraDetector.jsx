@@ -132,6 +132,32 @@ export default function CameraDetector() {
     }
   }
 
+  // Resize canvas to match media element's natural dimensions
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    const media = getMediaElement();
+    if (!canvas || !media) return;
+
+    const updateCanvasSize = () => {
+      const { width, height } = getMediaDimensions();
+      if (width > 0 && height > 0) {
+        canvas.width = width;
+        canvas.height = height;
+      }
+    };
+
+    updateCanvasSize();
+
+    // Add event listeners to update canvas size when media loads/changes
+    media.addEventListener("loadedmetadata", updateCanvasSize);
+    media.addEventListener("load", updateCanvasSize); // For img element
+
+    return () => {
+      media.removeEventListener("loadedmetadata", updateCanvasSize);
+      media.removeEventListener("load", updateCanvasSize);
+    };
+  }, [cameraMode]);
+
   // Draw canvas
   useEffect(() => {
     function drawCanvas() {
@@ -143,8 +169,6 @@ export default function CameraDetector() {
         return;
       }
       const ctx = canvas.getContext("2d");
-      canvas.width = width;
-      canvas.height = height;
 
       // Clear canvas
       ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -508,20 +532,20 @@ export default function CameraDetector() {
                 autoPlay
                 playsInline
                 muted
-                className="max-w-full rounded-2xl"
+                className="max-w-full rounded-2xl block"
               />
             ) : (
               <img
                 ref={imgRef}
                 src={ipCamUrl}
                 alt="IP Camera Stream"
-                className="max-w-full rounded-2xl"
+                className="max-w-full rounded-2xl block"
                 crossOrigin="anonymous"
               />
             )}
             <canvas
               ref={canvasRef}
-              className="absolute top-0 left-0 max-w-full rounded-2xl"
+              className="absolute top-0 left-0 max-w-full rounded-2xl w-full h-full"
               onMouseDown={handleMouseDown}
               onMouseMove={handleMouseMove}
               onMouseUp={handleMouseUp}
