@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import * as cocoSsd from "@tensorflow-models/coco-ssd";
 import "@tensorflow/tfjs";
 import { updateSeatStatus, getSeats } from "../dataClient";
+import Peer from "peerjs";
 
 const TOTAL_SEATS = 10;
 
@@ -9,8 +10,12 @@ export default function CameraDetector() {
   const videoRef = useRef(null);
   const canvasRef = useRef(null);
   const streamRef = useRef(null);
+  const peerRef = useRef(null);
+  const callRef = useRef(null);
   const [model, setModel] = useState(null);
+  const [cameraMode, setCameraMode] = useState("local"); // local or phone
   const [facingMode, setFacingMode] = useState('environment');
+  const [phoneCode, setPhoneCode] = useState("");
   const [isCalibrating, setIsCalibrating] = useState(false);
   const [isDetecting, setIsDetecting] = useState(false);
   const [zones, setZones] = useState([]);
@@ -22,6 +27,7 @@ export default function CameraDetector() {
   const [drawStart, setDrawStart] = useState({ x: 0, y: 0 });
   const [drawRect, setDrawRect] = useState(null);
   const [pendingSeats, setPendingSeats] = useState(new Set());
+  const [connectionStatus, setConnectionStatus] = useState("");
 
   const detectionIntervalRef = useRef(null);
   const animationFrameRef = useRef(null);
@@ -58,8 +64,10 @@ export default function CameraDetector() {
     loadInitialSeats();
   }, []);
 
-  // Start webcam
+  // Start local webcam
   useEffect(() => {
+    if (cameraMode !== "local") return;
+
     async function startWebcam() {
       try {
         const stream = await navigator.mediaDevices.getUserMedia({
@@ -77,12 +85,70 @@ export default function CameraDetector() {
     startWebcam();
 
     return () => {
-      // Cleanup stream on unmount
       if (streamRef.current) {
         streamRef.current.getTracks().forEach(track => track.stop());
       }
     };
-  }, [facingMode]);
+  }, [facingMode, cameraMode]);
+
+  // Cleanup PeerJS on unmount or mode switch
+  useEffect(() => {
+    return () => {
+      if (callRef.current) {
+        callRef.current.close();
+      }
+      if (peerRef.current) {
+        peerRef.current.destroy();
+      }
+    };
+  }, [cameraMode]);
+
+  async function connectToPhone() {
+    if (!phoneCode || phoneCode.length !== 4) {
+      setConnectionStatus("Please enter a valid 4-digit code");
+      return;
+    }
+
+    setConnectionStatus("Connecting...");
+    try {
+      const peer = new Peer();
+      peerRef.current = peer;
+
+      peer.on("open", () => {
+        const call = peer.call(phoneCode, new MediaStream());
+        callRef.current = call;
+
+        call.on("stream", (remoteStream) => {
+          streamRef.current = remoteStream;
+          if (videoRef.current) {
+            videoRef.current.srcObject = remoteStream;
+          }
+          setConnectionStatus("Connected to phone");
+          addLog("Connected to phone camera!");
+        });
+
+        call.on("error", (err) => {
+          console.error("Call error:", err);
+          setConnectionStatus("Connection failed — check the code and try again");
+          addLog("Connection error: " + err.message);
+        });
+
+        call.on("close", () => {
+          setConnectionStatus("Connection closed");
+        });
+      });
+
+      peer.on("error", (err) => {
+        console.error("Peer error:", err);
+        setConnectionStatus("Connection failed — check the code and try again");
+        addLog("Peer error: " + err.message);
+      });
+    } catch (error) {
+      console.error("Connection error:", error);
+      setConnectionStatus("Connection failed — check the code and try again");
+      addLog("Connection error: " + error.message);
+    }
+  }
 
   // Switch camera
   async function switchCamera() {
@@ -387,6 +453,61 @@ export default function CameraDetector() {
         <section className="rounded-3xl bg-white p-6 shadow-soft ring-1 ring-[#cbe7dd]">
           <div className="flex gap-4 flex-wrap mb-4">
             <button
+              onClick={() => setCameraMode("local")}
+              className={`rounded-2xl px-4 py-2 text-sm font-semibold shadow-soft transition-all ${
+                cameraMode === "local"
+                  ? "bg-[#00754a] text-white"
+                  : "bg-white text-[#1e3932] ring-1 ring-[#cbe7dd]"
+              }`}
+            >
+              Use This Device's Camera
+            </button>
+            <button
+              onClick={() => setCameraMode("phone")}
+              className={`rounded-2xl px-4 py-2 text-sm font-semibold shadow-soft transition-all ${
+                cameraMode === "phone"
+                  ? "bg-[#00754a] text-white"
+                  : "bg-white text-[#1e3932] ring-1 ring-[#cbe7dd]"
+              }`}
+            >
+              Connect to Phone Camera
+            </button>
+          </div>
+
+          {cameraMode === "phone" && (
+            <div className="mb-6">
+              <label className="block text-sm font-semibold text-[#1e3932] mb-2">
+                Phone Connection Code
+              </label>
+              <div className="flex gap-3 flex-wrap items-center">
+                <input
+                  type="text"
+                  value={phoneCode}
+                  onChange={(e) => setPhoneCode(e.target.value)}
+                  placeholder="Enter 4-digit code"
+                  maxLength={4}
+                  className="rounded-2xl px-4 py-3 text-lg font-mono border-2 border-[#cbe7dd] focus:border-[#00754a] focus:outline-none"
+                />
+                <button
+                  onClick={connectToPhone}
+                  className="rounded-2xl px-6 py-3 text-sm font-semibold shadow-soft transition-all bg-[#00754a] text-white"
+                >
+                  Connect
+                </button>
+              </div>
+              {connectionStatus && (
+                <p className="mt-2 text-sm text-[#4b5563]">
+                  {connectionStatus}
+                </p>
+              )}
+              <p className="mt-3 text-xs text-gray-500">
+                Open <a href="/phone-camera" className="text-[#00754a] font-semibold underline">/phone-camera</a> on your phone to get the code
+              </p>
+            </div>
+          )}
+
+          <div className="flex gap-4 flex-wrap mb-4">
+            <button
               onClick={() => setIsCalibrating(!isCalibrating)}
               className={`rounded-2xl px-4 py-2 text-sm font-semibold shadow-soft transition-all ${
                 isCalibrating
@@ -409,12 +530,14 @@ export default function CameraDetector() {
             >
               {isDetecting ? "Stop Detection" : "Start Detection"}
             </button>
-            <button
-              onClick={switchCamera}
-              className="rounded-2xl px-4 py-2 text-sm font-semibold shadow-soft transition-all bg-white text-[#1e3932] ring-1 ring-[#cbe7dd]"
-            >
-              Switch to {facingMode === 'user' ? 'Back' : 'Front'} Camera
-            </button>
+            {cameraMode === "local" && (
+              <button
+                onClick={switchCamera}
+                className="rounded-2xl px-4 py-2 text-sm font-semibold shadow-soft transition-all bg-white text-[#1e3932] ring-1 ring-[#cbe7dd]"
+              >
+                Switch to {facingMode === 'user' ? 'Back' : 'Front'} Camera
+              </button>
+            )}
           </div>
 
           <div className="relative inline-block">
