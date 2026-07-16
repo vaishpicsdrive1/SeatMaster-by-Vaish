@@ -162,31 +162,28 @@ export default function CameraDetector() {
             console.log("🎉 DIRECT ontrack event received!", event);
             console.log("Tracks:", event.tracks);
             console.log("Streams:", event.streams);
-            if (event.streams && event.streams.length > 0) {
-              streamRef.current = event.streams[0];
-              if (videoRef.current) {
-                videoRef.current.srcObject = event.streams[0];
-                videoRef.current.onloadedmetadata = () => {
-                  console.log("Video metadata loaded! Playing...");
-                  videoRef.current.play().catch(err => console.error("Error playing video:", err));
-                };
-              }
-              setConnectionStatus("Connected to phone");
-              addLog("Connected to phone camera!");
-            } else {
-              // Create a new MediaStream from the received track
-              const newStream = new MediaStream([event.track]);
-              streamRef.current = newStream;
-              if (videoRef.current) {
-                videoRef.current.srcObject = newStream;
-                videoRef.current.onloadedmetadata = () => {
-                  console.log("Video metadata loaded! Playing...");
-                  videoRef.current.play().catch(err => console.error("Error playing video:", err));
-                };
-              }
-              setConnectionStatus("Connected to phone");
-              addLog("Connected to phone camera!");
+            const streamToUse = (event.streams && event.streams.length > 0) ? event.streams[0] : new MediaStream([event.track]);
+            console.log('STREAM RECEIVED (ontrack):', streamToUse);
+            console.log('Video tracks:', streamToUse.getVideoTracks());
+            streamToUse.getVideoTracks().forEach(track => {
+              console.log('Track readyState:', track.readyState, 'enabled:', track.enabled, 'muted:', track.muted);
+            });
+            streamRef.current = streamToUse;
+            if (videoRef.current) {
+              videoRef.current.srcObject = streamToUse;
+              videoRef.current.play().then(() => {
+                console.log('VIDEO PLAY SUCCEEDED (ontrack)');
+              }).catch(err => {
+                console.error('VIDEO PLAY FAILED (ontrack):', err);
+              });
+              videoRef.current.onloadedmetadata = () => {
+                console.log('VIDEO METADATA — width:', videoRef.current.videoWidth, 'height:', videoRef.current.videoHeight);
+                console.log("Video metadata loaded! Playing...");
+                videoRef.current.play().catch(err => console.error("Error playing video:", err));
+              };
             }
+            setConnectionStatus("Connected to phone");
+            addLog("Connected to phone camera!");
           };
         } else {
           console.log("No RTCPeerConnection available on call object!");
@@ -222,10 +219,21 @@ export default function CameraDetector() {
         call.on("track", (track, remoteStream) => {
           console.log("✅ Received remote track from phone!", track.kind);
           console.log("Remote stream:", remoteStream);
+          console.log('STREAM RECEIVED (track):', remoteStream);
+          console.log('Video tracks:', remoteStream.getVideoTracks());
+          remoteStream.getVideoTracks().forEach(t => {
+            console.log('Track readyState:', t.readyState, 'enabled:', t.enabled, 'muted:', t.muted);
+          });
           streamRef.current = remoteStream;
           if (videoRef.current) {
             videoRef.current.srcObject = remoteStream;
+            videoRef.current.play().then(() => {
+              console.log('VIDEO PLAY SUCCEEDED (track)');
+            }).catch(err => {
+              console.error('VIDEO PLAY FAILED (track):', err);
+            });
             videoRef.current.onloadedmetadata = () => {
+              console.log('VIDEO METADATA — width:', videoRef.current.videoWidth, 'height:', videoRef.current.videoHeight);
               console.log("Video metadata loaded! Playing...");
               videoRef.current.play().catch(err => console.error("Error playing video:", err));
             };

@@ -111,6 +111,9 @@ export default function PhoneCamera() {
         console.log("Answering call with stream...");
         console.log("Number of tracks in stream:", streamRef.current.getTracks().length);
         console.log("Video tracks:", streamRef.current.getVideoTracks());
+        streamRef.current.getVideoTracks().forEach(track => {
+          console.log('Phone sending track — readyState:', track.readyState, 'enabled:', track.enabled, 'muted:', track.muted);
+        });
         console.log("Call object on phone:", call);
         // Log the peer connection on the phone too
         if (call.peerConnection) {
@@ -119,6 +122,7 @@ export default function PhoneCamera() {
         // Create a new MediaStream and add tracks to it (some browsers need this)
         const sendStream = new MediaStream();
         streamRef.current.getTracks().forEach(track => sendStream.addTrack(track));
+        console.log('Phone sendStream created with tracks:', sendStream.getTracks());
         call.answer(sendStream);
         setStatus("Connected — streaming");
         setIsConnected(true);
@@ -224,6 +228,7 @@ export default function PhoneCamera() {
               autoPlay
               playsInline
               muted
+              onLoadedMetadata={() => console.log('PHONE VIDEO METADATA — width:', videoRef.current.videoWidth, 'height:', videoRef.current.videoHeight)}
               className="max-w-full rounded-2xl"
             />
           </div>
