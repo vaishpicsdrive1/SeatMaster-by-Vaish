@@ -83,15 +83,20 @@ export default function PhoneCamera() {
     setConnectionCode(code);
 
     // Initialize PeerJS
-    const peer = new Peer(code, {
-      debug: 3, // Enable debug logging
-      config: {
-        iceServers: [
-          { urls: "stun:stun.l.google.com:19302" },
-          { urls: "stun:stun1.l.google.com:19302" }
-        ]
-      }
-    });
+      const peer = new Peer(code, {
+        debug: 3, // Enable debug logging
+        config: {
+          iceServers: [
+            { urls: "stun:stun.l.google.com:19302" },
+            { urls: "stun:stun1.l.google.com:19302" },
+            {
+              urls: "turn:openrelay.metered.ca:80",
+              username: "openrelayproject",
+              credential: "openrelayproject"
+            }
+          ]
+        }
+      });
     peerRef.current = peer;
 
     peer.on("open", (id) => {
@@ -119,11 +124,9 @@ export default function PhoneCamera() {
         if (call.peerConnection) {
           console.log("RTCPeerConnection available on phone!");
         }
-        // Create a new MediaStream and add tracks to it (some browsers need this)
-        const sendStream = new MediaStream();
-        streamRef.current.getTracks().forEach(track => sendStream.addTrack(track));
-        console.log('Phone sendStream created with tracks:', sendStream.getTracks());
-        call.answer(sendStream);
+        // Just pass the original stream directly
+        console.log('Phone answering call with original stream:', streamRef.current);
+        call.answer(streamRef.current);
         setStatus("Connected — streaming");
         setIsConnected(true);
         addLog("Call answered! Streaming to laptop!");

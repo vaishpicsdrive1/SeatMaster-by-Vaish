@@ -137,20 +137,25 @@ export default function CameraDetector() {
     addLog("Starting connection to phone...");
     try {
       const peer = new Peer({
-        debug: 3, // Enable debug logging
-        config: {
-          iceServers: [
-            { urls: "stun:stun.l.google.com:19302" },
-            { urls: "stun:stun1.l.google.com:19302" }
-          ]
-        }
-      });
+          debug: 3, // Enable debug logging
+          config: {
+            iceServers: [
+              { urls: "stun:stun.l.google.com:19302" },
+              { urls: "stun:stun1.l.google.com:19302" },
+              {
+                urls: "turn:openrelay.metered.ca:80",
+                username: "openrelayproject",
+                credential: "openrelayproject"
+              }
+            ]
+          }
+        });
       peerRef.current = peer;
 
       peer.on("open", (id) => {
         console.log("✅ Peer connected with ID:", id);
         addLog("Peer connected! Calling phone...");
-        const call = peer.call(phoneCode, new MediaStream());
+        const call = peer.call(phoneCode);
         callRef.current = call;
 
         // Log the call object to inspect its properties
