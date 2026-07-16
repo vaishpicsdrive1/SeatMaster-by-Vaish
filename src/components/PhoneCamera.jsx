@@ -70,6 +70,15 @@ export default function PhoneCamera() {
 
   // Generate 4-digit code and initialize PeerJS
   useEffect(() => {
+    const timestamp = new Date().toLocaleTimeString();
+    console.log(`[${timestamp}] PhoneCamera: Peer creation useEffect running!`);
+
+    // Guard against React StrictMode double-invocation: if peer already exists, skip
+    if (peerRef.current) {
+      console.log(`[${timestamp}] PhoneCamera: Peer already exists, skipping creation!`);
+      return;
+    }
+
     const code = Math.floor(1000 + Math.random() * 9000).toString();
     setConnectionCode(code);
 
@@ -157,7 +166,10 @@ export default function PhoneCamera() {
     });
 
     return () => {
+      const timestamp = new Date().toLocaleTimeString();
+      console.log(`[${timestamp}] PhoneCamera: Peer creation useEffect CLEANUP running, destroying peer!`);
       peer.destroy();
+      peerRef.current = null; // Also clear the ref on cleanup
     };
   }, []); // No dependencies, so this runs once on mount
 

@@ -102,19 +102,34 @@ export default function CameraDetector() {
 
   // Cleanup PeerJS on unmount or mode switch
   useEffect(() => {
+    const timestamp = new Date().toLocaleTimeString();
+    console.log(`[${timestamp}] CameraDetector: Cleanup useEffect (cameraMode) initialized!`);
     return () => {
+      const cleanupTimestamp = new Date().toLocaleTimeString();
+      console.log(`[${cleanupTimestamp}] CameraDetector: Cleanup useEffect running!`);
       if (callRef.current) {
         callRef.current.close();
+        callRef.current = null;
       }
       if (peerRef.current) {
         peerRef.current.destroy();
+        peerRef.current = null;
       }
     };
   }, [cameraMode]);
 
   async function connectToPhone() {
+    const timestamp = new Date().toLocaleTimeString();
+    console.log(`[${timestamp}] CameraDetector: connectToPhone called!`);
+
     if (!phoneCode || phoneCode.length !== 4) {
       setConnectionStatus("Please enter a valid 4-digit code");
+      return;
+    }
+
+    // Guard: if a peer already exists, don't create another one
+    if (peerRef.current) {
+      console.log(`[${timestamp}] CameraDetector: Peer already exists, skipping creation!`);
       return;
     }
 
