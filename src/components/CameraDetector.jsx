@@ -110,15 +110,22 @@ export default function CameraDetector() {
     }
 
     setConnectionStatus("Connecting...");
+    addLog("Starting connection to phone...");
     try {
-      const peer = new Peer();
+      const peer = new Peer({
+        debug: 3 // Enable debug logging
+      });
       peerRef.current = peer;
 
-      peer.on("open", () => {
+      peer.on("open", (id) => {
+        console.log("✅ Peer connected with ID:", id);
+        addLog("Peer connected! Calling phone...");
         const call = peer.call(phoneCode, new MediaStream());
         callRef.current = call;
 
         call.on("stream", (remoteStream) => {
+          console.log("✅ Received remote stream from phone!");
+          console.log("Stream tracks:", remoteStream.getTracks());
           streamRef.current = remoteStream;
           if (videoRef.current) {
             videoRef.current.srcObject = remoteStream;
@@ -128,23 +135,25 @@ export default function CameraDetector() {
         });
 
         call.on("error", (err) => {
-          console.error("Call error:", err);
+          console.error("❌ Call error:", err);
           setConnectionStatus("Connection failed — check the code and try again");
-          addLog("Connection error: " + err.message);
+          addLog("Call error: " + err.message);
         });
 
         call.on("close", () => {
+          console.log("Call ended");
           setConnectionStatus("Connection closed");
+          addLog("Connection closed");
         });
       });
 
       peer.on("error", (err) => {
-        console.error("Peer error:", err);
+        console.error("❌ Peer error:", err);
         setConnectionStatus("Connection failed — check the code and try again");
         addLog("Peer error: " + err.message);
       });
     } catch (error) {
-      console.error("Connection error:", error);
+      console.error("❌ Connection error:", error);
       setConnectionStatus("Connection failed — check the code and try again");
       addLog("Connection error: " + error.message);
     }

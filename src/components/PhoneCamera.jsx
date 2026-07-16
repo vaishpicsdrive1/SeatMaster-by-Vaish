@@ -10,51 +10,36 @@ export default function PhoneCamera() {
   const [connectionCode, setConnectionCode] = useState("");
   const [status, setStatus] = useState("Waiting for laptop to connect...");
   const [isConnected, setIsConnected] = useState(false);
+  const [logs, setLogs] = useState([]);
+  const [streamReady, setStreamReady] = useState(false);
 
-  // Generate 4-digit code
-  useEffect(() => {
-    const code = Math.floor(1000 + Math.random() * 9000).toString();
-    setConnectionCode(code);
-
-    // Initialize PeerJS
-    const peer = new Peer(code);
-    peerRef.current = peer;
-
-    peer.on("open", () => {
-      console.log("Peer ID:", code);
-    });
-
-    peer.on("call", (call) => {
-      if (streamRef.current) {
-        call.answer(streamRef.current);
-        setStatus("Connected — streaming");
-        setIsConnected(true);
-      }
-    });
-
-    peer.on("error", (err) => {
-      console.error("Peer error:", err);
-      setStatus("Error: " + err.message);
-    });
-
-    return () => {
-      peer.destroy();
-    };
-  }, []);
+  function addLog(text) {
+    const timestamp = new Date().toLocaleTimeString();
+    setLogs((prev) => [...prev, { text, timestamp }]);
+  }
 
   // Start webcam
   useEffect(() => {
     async function startWebcam() {
       try {
         const stream = await navigator.mediaDevices.getUserMedia({
-          video: { facingMode: { ideal: facingMode } },
+          video: { 
+            facingMode: { ideal: facingMode },
+            width: { ideal: 1280 },
+            height: { ideal: 720 }
+          },
         });
         streamRef.current = stream;
         if (videoRef.current) {
           videoRef.current.srcObject = stream;
+          videoRef.current.onloadedmetadata = () => {
+            setStreamReady(true);
+            addLog("Camera stream ready!");
+          };
         }
       } catch (error) {
         console.error("Failed to access webcam:", error);
+        addLog("Failed to access camera: " + error.message);
       }
     }
     startWebcam();
@@ -63,8 +48,70 @@ export default function PhoneCamera() {
       if (streamRef.current) {
         streamRef.current.getTracks().forEach(track => track.stop());
       }
+      setStreamReady(false);
     };
   }, [facingMode]);
+
+  // Generate 4-digit code
+  useEffect(() => {
+    const code = Math.floor(1000 + Math.random() * 9000).toString();
+    setConnectionCode(code);
+
+    // Initialize PeerJS
+    const peer = new Peer(code, {
+      debug: 3 // Enable debug logging
+    });
+    peerRef.current = peer;
+
+    peer.on("open", (id) => {
+      console.log("✅ Peer connected with ID:", id);
+      addLog("Peer connected!");
+    });
+
+    peer.on("connection", (conn) => {
+      console.log("Incoming connection!");
+    });
+
+    peer.on("call", (call) => {
+      console.log("📞 Incoming call!");
+      addLog("Incoming call received!");
+      if (streamRef.current && streamReady) {
+        console.log("Answering call with stream...");
+        call.answer(streamRef.current);
+        setStatus("Connected — streaming");
+        setIsConnected(true);
+        addLog("Call answered! Streaming to laptop!");
+      } else {
+        console.error("No stream available to answer call!");
+        addLog("Error: No camera stream available!");
+      }
+
+      call.on("stream", (remoteStream) => {
+        console.log("Received remote stream (but we shouldn't need this)!");
+      });
+
+      call.on("close", () => {
+        console.log("Call ended");
+        setStatus("Call ended");
+        setIsConnected(false);
+      });
+
+      call.on("error", (err) => {
+        console.error("Call error:", err);
+        addLog("Call error: " + err.message);
+      });
+    });
+
+    peer.on("error", (err) => {
+      console.error("❌ Peer error:", err);
+      setStatus("Error: " + err.message);
+      addLog("Peer error: " + err.message);
+    });
+
+    return () => {
+      peer.destroy();
+    };
+  }, [streamReady]);
 
   function switchCamera() {
     if (streamRef.current) {
@@ -119,6 +166,27 @@ export default function PhoneCamera() {
               muted
               className="max-w-full rounded-2xl"
             />
+          </div>
+
+          <div className="mt-6">
+            <h3 className="text-lg font-semibold text-[#1e3932] mb-2">
+              Connection Log
+            </h3>
+            <div className="bg-gray-100 rounded-2xl p-4 max-h-60 overflow-y-auto">
+              {logs.length === 0 ? (
+                <p className="text-sm text-gray-500">Waiting for connection...</p>
+              ) : (
+                logs
+                  .slice(-20)
+                  .reverse()
+                  .map((log, i) => (
+                    <p key={i} className="text-sm">
+                      <span className="text-gray-500">[{log.timestamp}]</span>{" "}
+                      {log.text}
+                    </p>
+                  ))
+              )}
+            </div>
           </div>
         </section>
       </main>
