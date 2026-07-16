@@ -138,10 +138,26 @@ export default function CameraDetector() {
         const call = peer.call(phoneCode, new MediaStream());
         callRef.current = call;
 
+        // Listen for both "stream" (legacy) and "track" (newer) events
         call.on("stream", (remoteStream) => {
-          console.log("✅ Received remote stream from phone!");
+          console.log("✅ Received remote stream from phone (stream event)!");
           console.log("Stream tracks:", remoteStream.getTracks());
           console.log("Video tracks:", remoteStream.getVideoTracks());
+          streamRef.current = remoteStream;
+          if (videoRef.current) {
+            videoRef.current.srcObject = remoteStream;
+            videoRef.current.onloadedmetadata = () => {
+              console.log("Video metadata loaded! Playing...");
+              videoRef.current.play().catch(err => console.error("Error playing video:", err));
+            };
+          }
+          setConnectionStatus("Connected to phone");
+          addLog("Connected to phone camera!");
+        });
+
+        call.on("track", (track, remoteStream) => {
+          console.log("✅ Received remote track from phone!", track.kind);
+          console.log("Remote stream:", remoteStream);
           streamRef.current = remoteStream;
           if (videoRef.current) {
             videoRef.current.srcObject = remoteStream;

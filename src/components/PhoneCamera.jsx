@@ -85,7 +85,10 @@ export default function PhoneCamera() {
         console.log("Answering call with stream...");
         console.log("Number of tracks in stream:", streamRef.current.getTracks().length);
         console.log("Video tracks:", streamRef.current.getVideoTracks());
-        call.answer(streamRef.current);
+        // Create a new MediaStream and add tracks to it (some browsers need this)
+        const sendStream = new MediaStream();
+        streamRef.current.getTracks().forEach(track => sendStream.addTrack(track));
+        call.answer(sendStream);
         setStatus("Connected — streaming");
         setIsConnected(true);
         addLog("Call answered! Streaming to laptop!");
